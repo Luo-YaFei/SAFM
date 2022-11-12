@@ -220,3 +220,57 @@ class SAFM(nn.Module):
         out = normalized * (1 + gamma) + beta
 
         return out
+
+class ClassAffine(nn.Module):
+    def __init__(self, label_nc, affine_nc, add_dist=False):
+        super(ClassAffine, self).__init__()
+        self.add_dist = add_dist
+        self.affine_nc = affine_nc
+        self.label_nc = label_nc
+        self.weight = nn.Parameter(torch.Tensor(self.label_nc, self.affine_nc))
+        self.bias = nn.Parameter(torch.Tensor(self.label_nc, self.affine_nc))
+        nn.init.uniform_(self.weight)
+        nn.init.zeros_(self.bias)
+        if add_dist:
+            self.dist_conv_w = nn.Conv2d(2, 1, kernel_size=1, padding=0)
+            nn.init.zeros_(self.dist_conv_w.weight)
+            nn.init.zeros_(self.dist_conv_w.bias)
+            self.dist_conv_b = nn.Conv2d(2, 1, kernel_size=1, padding=0)
+            nn.init.zeros_(self.dist_conv_b.weight)
+            nn.init.zeros_(self.dist_conv_b.bias)
+
+    def affine_gather(self, input, mask):
+        n, c, h, w = input.shape
+        # process mask
+        mask2 = torch.argmax(mask, 1) # [n, h, w]
+        mask2 = mask2.view(n, h*w).long() # [n, hw]
+        mask2 = mask2.unsqueeze(1).expand(n, self.affine_nc, h*w) # [n, nc, hw]
+        # process weights
+        weight2 = torch.unsqueeze(self.weight, 2).expand(self.label_nc, self.affine_nc, h*w) # [cls, nc, hw]
+        bias2 = torch.unsqueeze(self.bias, 2).expand(self.label_nc, self.affine_nc, h*w) # [cls, nc, hw]
+        # torch gather function
+        class_weight = torch.gather(weight2, 0, mask2).view(n, self.affine_nc, h, w)
+        class_bias = torch.gather(bias2, 0, mask2).view(n, self.affine_nc, h, w)
+        return class_weight, class_bias
+
+    def affine_einsum(self, mask):
+        class_weight = torch.einsum('ic,nihw->nchw', self.weight, mask)
+        class_bias = torch.einsum('ic,nihw->nchw', self.bias, mask)
+        return class_weight, class_bias
+
+    def affine_embed(self, mask):
+        arg_mask = torch.argmax(mask, 1).long() # [n, h, w]
+        class_weight = F.embedding(arg_mask, self.weight).permute(0, 3, 1, 2) # [n, c, h, w]
+        class_bias = F.embedding(arg_mask, self.bias).permute(0, 3, 1, 2) # [n, c, h, w]
+        return class_weight, class_bias
+
+    def forward(self, input, mask, input_dist=None):
+        # class_weight, class_bias = self.affine_gather(input, mask)
+        # class_weight, class_bias = self.affine_einsum(mask)
+        class_weight, class_bias = self.affine_embed(mask)
+        if self.add_dist:
+            input_dist = F.interpolate(input_dist, size=input.size()[2:], mode='nearest')
+            class_weight = class_weight * (1 + self.dist_conv_w(input_dist))
+            class_bias = class_bias * (1 + self.dist_conv_b(input_dist))
+        x = input * class_weight + class_bias
+        return x
