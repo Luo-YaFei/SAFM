@@ -185,12 +185,14 @@ class SAFM(nn.Module):
         self.depconv1=DepthConv(36)
         self.depconv2=DepthConv(36)
 
-        self.mlp_shared = nn.Sequential(
-            nn.Conv2d(label_nc+36, nhidden, kernel_size=ks, padding=pw),
-            nn.ReLU()
-        )
-        self.mlp_gamma = nn.Conv2d(nhidden, norm_nc, kernel_size=ks, padding=pw)
-        self.mlp_beta = nn.Conv2d(nhidden, norm_nc, kernel_size=ks, padding=pw)
+        # self.mlp_shared = nn.Sequential(
+        #     nn.Conv2d(label_nc+36, nhidden, kernel_size=ks, padding=pw),
+        #     nn.ReLU()
+        # )
+        # self.mlp_gamma = nn.Conv2d(nhidden, norm_nc, kernel_size=ks, padding=pw)
+        # self.mlp_beta = nn.Conv2d(nhidden, norm_nc, kernel_size=ks, padding=pw)
+
+        self.class_specifiedd_affine = ClassAffine(label_nc+36, norm_nc)
 
     def forward(self, x, segmap):
 
@@ -213,11 +215,12 @@ class SAFM(nn.Module):
 
         segmap = torch.cat((pure_seg, dcov_dis_final),dim=1)
 
-        actv = self.mlp_shared(segmap)
-        gamma = self.mlp_gamma(actv)
-        beta = self.mlp_beta(actv)
-
-        out = normalized * (1 + gamma) + beta
+        # actv = self.mlp_shared(segmap)
+        # gamma = self.mlp_gamma(actv)
+        # beta = self.mlp_beta(actv)
+        #
+        # out = normalized * (1 + gamma) + beta
+        out = self.class_specifiedd_affine(normalized,segmap)
 
         return out
 
@@ -238,25 +241,6 @@ class ClassAffine(nn.Module):
             self.dist_conv_b = nn.Conv2d(2, 1, kernel_size=1, padding=0)
             nn.init.zeros_(self.dist_conv_b.weight)
             nn.init.zeros_(self.dist_conv_b.bias)
-
-    def affine_gather(self, input, mask):
-        n, c, h, w = input.shape
-        # process mask
-        mask2 = torch.argmax(mask, 1) # [n, h, w]
-        mask2 = mask2.view(n, h*w).long() # [n, hw]
-        mask2 = mask2.unsqueeze(1).expand(n, self.affine_nc, h*w) # [n, nc, hw]
-        # process weights
-        weight2 = torch.unsqueeze(self.weight, 2).expand(self.label_nc, self.affine_nc, h*w) # [cls, nc, hw]
-        bias2 = torch.unsqueeze(self.bias, 2).expand(self.label_nc, self.affine_nc, h*w) # [cls, nc, hw]
-        # torch gather function
-        class_weight = torch.gather(weight2, 0, mask2).view(n, self.affine_nc, h, w)
-        class_bias = torch.gather(bias2, 0, mask2).view(n, self.affine_nc, h, w)
-        return class_weight, class_bias
-
-    def affine_einsum(self, mask):
-        class_weight = torch.einsum('ic,nihw->nchw', self.weight, mask)
-        class_bias = torch.einsum('ic,nihw->nchw', self.bias, mask)
-        return class_weight, class_bias
 
     def affine_embed(self, mask):
         arg_mask = torch.argmax(mask, 1).long() # [n, h, w]
