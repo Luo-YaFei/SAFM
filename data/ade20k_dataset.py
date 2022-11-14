@@ -6,6 +6,11 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 from data.pix2pix_dataset import Pix2pixDataset
 from data.image_folder import make_dataset
 import os
+import models.shape_context as sc
+import numpy as np
+from PIL import Image
+from data.base_dataset import BaseDataset, get_params, get_transform
+import util
 
 
 class ADE20KDataset(Pix2pixDataset):
@@ -48,6 +53,9 @@ class ADE20KDataset(Pix2pixDataset):
         pth = opt.instance_root
         temp_path = sorted(os.listdir(pth))
         instance_paths = [os.path.join(pth,x) for x in temp_path]
+
+        instance_paths = self.tran_spd(label_paths,instance_paths)
+
         return label_paths, image_paths, instance_paths
 
     # In ADE20k, 'unknown' label is of value 0.
@@ -58,5 +66,27 @@ class ADE20KDataset(Pix2pixDataset):
         print(self.opt.label_nc)
         label[label == -1] = self.opt.label_nc
         input_dict['label'] = label
-        import numpy as np
         print(np.unique(label))
+
+    def tran_spd(self,label_paths,instance_paths):
+        spd = sc.ShapeContext()
+
+        instance_image = [Image.open(i) for i in instance_paths]
+        instance_tensor = []
+
+        for i in range(len(instance_paths)):
+            params = get_params(self.opt, Image.open(label_paths[i]).size)
+            transform_inst = get_transform(self.opt, params, method=Image.NEAREST, normalize=False, toTensor=False)
+            instance_tensor.append(transform_inst(instance_image[i]))
+
+        instance_tensor = [np.array(i)[:, :, 1][np.newaxis, ...] for i in instance_tensor]
+        instance = [spd.spd(i) for i in instance_tensor]
+
+        os.mkdir('dataset')
+
+        for i in range(len(instance)):
+            path = os.path.join('dataset',instance_paths[i])
+            util.save_image(instance[i], path, create_dir=False)
+            instance_paths[i] = path
+
+        return path

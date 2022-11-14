@@ -68,8 +68,9 @@ class Pix2PixModel(torch.nn.Module):
         img = np.array(data['instance']) if data['instance'].shape[2]==dh else np.array(torch.nn.functional.interpolate(data['instance'].unsqueeze(1).float(),size=(dh,dw)),dtype=np.uint8)
         
         ins = np.where(data['instance']<1000,0,data['instance']) if self.opt.dataset_mode=='cityscapes' else np.array(data['instance'])
-        data['discriptor'] = spd.spd(ins)
-        
+        # data['discriptor'] = spd.spd(ins)
+        data['discriptor'] = ins
+
         torch.cuda.set_device(torch.device('cuda:0'))
         data['label'] = data['label'].reshape(bsz,1,dh,dw).to(torch.float).cuda()
         data['instance'] = data['instance'].reshape(bsz,1,dh,dw).to(torch.float).cuda()
