@@ -88,7 +88,9 @@ class ADE20KDataset(Pix2pixDataset):
             instance = spd.spd(np.array([instance_tensor]))
 
             path = os.path.join('dataset',instance_paths[i])
-            util.save_image(instance, path, create_dir=False)
+            image_pil = Image.fromarray(instance)
+            image_pil.save(path)
+
             instance_paths[i] = path
 
         return path
