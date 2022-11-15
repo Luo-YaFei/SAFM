@@ -81,8 +81,8 @@ class ADE20KDataset(Pix2pixDataset):
 
             instance_tensor = transform_inst(instance_image)
 
-            instance_tensor = np.array(instance_tensor)[:, :, 1][np.newaxis, ...]
-            instance = spd.spd(instance_tensor)
+            instance_tensor = np.array(instance_tensor)[:,:,1][np.newaxis,...]
+            instance = spd.spd(np.array([instance_tensor]))
 
             path = os.path.join('dataset',instance_paths[i])
             util.save_image(instance, path, create_dir=False)
