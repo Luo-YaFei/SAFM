@@ -52,7 +52,7 @@ class ADE20KDataset(Pix2pixDataset):
         import os
         pth = opt.instance_root
         temp_path = sorted(os.listdir(pth))
-        instance_paths = [os.path.join(pth,x) for x in temp_path]
+        instance_paths = [os.path.normpath(os.path.join(pth,x)) for x in temp_path]
 
         instance_paths = self.tran_spd(label_paths,instance_paths)
 
