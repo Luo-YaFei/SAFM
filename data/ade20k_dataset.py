@@ -71,7 +71,10 @@ class ADE20KDataset(Pix2pixDataset):
     def tran_spd(self,label_paths,instance_paths):
         spd = sc.ShapeContext()
 
-        os.mkdir('dataset')
+        try:
+            os.mkdir('dataset')
+        except:
+            pass
 
         for i in range(len(instance_paths)):
             instance_image = Image.open(instance_paths[i])
