@@ -71,22 +71,21 @@ class ADE20KDataset(Pix2pixDataset):
     def tran_spd(self,label_paths,instance_paths):
         spd = sc.ShapeContext()
 
-        instance_image = [Image.open(i) for i in instance_paths]
-        instance_tensor = []
-
-        for i in range(len(instance_paths)):
-            params = get_params(self.opt, Image.open(label_paths[i]).size)
-            transform_inst = get_transform(self.opt, params, method=Image.NEAREST, normalize=False, toTensor=False)
-            instance_tensor.append(transform_inst(instance_image[i]))
-
-        instance_tensor = [np.array(i)[:, :, 1][np.newaxis, ...] for i in instance_tensor]
-        instance = [spd.spd(i) for i in instance_tensor]
-
         os.mkdir('dataset')
 
-        for i in range(len(instance)):
+        for i in range(len(instance_paths)):
+            instance_image = Image.open(instance_paths[i])
+
+            params = get_params(self.opt, Image.open(label_paths[i]).size)
+            transform_inst = get_transform(self.opt, params, method=Image.NEAREST, normalize=False, toTensor=False)
+
+            instance_tensor = transform_inst(instance_image)
+
+            instance_tensor = np.array(instance_tensor)[:, :, 1][np.newaxis, ...]
+            instance = spd.spd(instance_tensor)
+
             path = os.path.join('dataset',instance_paths[i])
-            util.save_image(instance[i], path, create_dir=False)
+            util.save_image(instance, path, create_dir=False)
             instance_paths[i] = path
 
         return path
